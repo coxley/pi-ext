@@ -134,7 +134,10 @@ while (holds()) {
     try {
       snap.pis = await pollPis();
       polled = now;
-    } catch {
+    } catch (err) {
+      // rex did not start (ENOENT, EPERM: a sandboxed Pi started this refresher). Give up the lock,
+      // so a Pi that reaches Rex starts one that can poll.
+      if (typeof (err as { code?: unknown }).code === "string") break;
       // Rex may be restarting: keep the last list for a while.
       if (now - polled > PIS_STALE_MS) snap.pis = [];
     }

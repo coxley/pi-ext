@@ -145,9 +145,10 @@ export default function sidebar(pi: ExtensionAPI): void {
 
   const gitOf = (cwd: string): Git | undefined => git[cwd] ?? undefined;
 
-  // startRefresher starts the background refresher unless one runs; its lock admits only one.
+  // startRefresher starts the background refresher unless one runs; its lock admits only one. It
+  // inherits this Pi's environment, so only a Pi in Rex (rex on PATH) starts it.
   const startRefresher = () => {
-    if (refresherRuns()) return;
+    if (!rexSession || refresherRuns()) return;
     // Pi's entry is dist/bundle/cli.js; SessionManager is exported from dist/index.js.
     const piIndex = join(dirname(dirname(realpathSync(process.argv[1]))), "index.js");
     spawn(process.execPath, [REFRESHER, piIndex], { detached: true, stdio: "ignore" }).unref();
@@ -275,7 +276,12 @@ export default function sidebar(pi: ExtensionAPI): void {
   const switchTo = async (s: Session) => {
     if (s.id === me()) return;
     const target = live.get(s.id);
-    if (!target) return startPi(s.cwd, ["--session", s.path]);
+    if (!target) {
+      // The snapshot lags a new Pi by up to a poll: ask Rex before starting a second Pi on one session file.
+      const list = (await rexCall("session.list_blocks", { session_id: rexSession })) as { blocks?: { block_id: string; label?: string }[] };
+      const found = list.blocks?.find((b) => b.label === `pi:${s.id}`);
+      return found ? place(found.block_id, s.id) : startPi(s.cwd, ["--session", s.path]);
+    }
     if (target.rexSession === rexSession) return place(target.blockId, s.id);
     let windowId = target.windowId;
     if (!target.placed) {

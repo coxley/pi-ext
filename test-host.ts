@@ -27,7 +27,7 @@ function globalRoot(): string | undefined {
   }
 }
 
-const modules = [process.env.PI_TEST_MODULES, managed(), globalRoot()].find((dir) => dir && existsSync(join(dir, AGENT)));
+export const modules = [process.env.PI_TEST_MODULES, managed(), globalRoot()].find((dir) => dir && existsSync(join(dir, AGENT))) as string;
 if (!modules) throw new Error(`Pi not found: set PI_TEST_MODULES to the node_modules directory that holds ${AGENT}`);
 
 // host imports path (e.g. "@earendil-works/pi-tui/dist/index.js") from Pi's installation. A global npm
