@@ -64,6 +64,9 @@ test("expandPair turns only the same-text pill pair before the cursor into one l
   e.handleInput(pasteEvent(big));
   assert.equal(expandPair(e), true);
   assert.equal(e.getText(), `[paste #1 +13 lines]${big}`, "the earlier pill keeps its marker");
+  e.undo();
+  assert.match(e.getText(), /^(\[paste #\d \+\d+ lines\]){3}$/, "one undo restores the pair");
+  assert.equal(expandPair(e), true);
   // pix-pretty's chips end with a space: "[#4] [#5] " leaves one trailing separator.
   for (const k of [pasteEvent(big), " ", pasteEvent(big), " "]) e.handleInput(k);
   assert.equal(expandPair(e), true);

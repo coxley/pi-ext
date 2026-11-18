@@ -1,5 +1,6 @@
 // Expand a pasted-twice pill in a pi-tui Editor. Shared by this extension and
-// the question inbox (../question-inbox/inbox.ts).
+// other editors that import it.
+import { oneUndoStep } from "../compat.ts";
 
 // samePaste ignores trailing newlines: copy sources differ by one for the same text.
 export const samePaste = (a: string, b: string) => a.replace(/\n+$/, "") === b.replace(/\n+$/, "");
@@ -31,10 +32,12 @@ export function expandPair(editor: PairEditor): boolean {
   if (!m || typeof text !== "string" || typeof dup !== "string" || !samePaste(text, dup)) return false;
   // A pill deletes as one unit; each separator space is one more backspace.
   const deletes = 2 + m[0].replace(new RegExp(PILL, "g"), "").length;
-  for (let i = 0; i < deletes; i++) editor.handleInput("\x7f");
   const quote = quoteOnly(before.slice(0, m.index));
   const body = quote ? quoteLines(text.replace(/\n+$/, ""), quote) : text;
-  editor.insertTextAtCursor(body + m[3]);
+  oneUndoStep(editor, () => {
+    for (let i = 0; i < deletes; i++) editor.handleInput("\x7f");
+    editor.insertTextAtCursor(body + m[3]);
+  });
   return true;
 }
 

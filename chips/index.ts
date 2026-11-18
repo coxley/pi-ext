@@ -2,7 +2,7 @@ import { statSync } from "node:fs";
 import { resolve } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Editor, TuiAltScreen, visibleWidth } from "@earendil-works/pi-tui";
-import { missing, unsupported } from "../compat.ts";
+import { missing, oneUndoStep, unsupported } from "../compat.ts";
 import { editorRange } from "../editor-copy/copy.ts";
 import { type Box, editorAt, editorView } from "../editor-copy/index.ts";
 import { paint, rowStarts } from "../md-prompt/md.ts";
@@ -55,6 +55,16 @@ function chipAt(screen: Screen, raw: RawMouse): { editor: Editor; id: number; va
   return id === undefined || value === undefined ? undefined : { editor: hit.editor, id, value };
 }
 
+// replaceBefore deletes count graphemes before the cursor and inserts text, as one undo step.
+// Backspace deletes a marker as one unit and lets pi-tui renumber the pastes. The insert is
+// below every insertTextAtCursor patch: chips' own (and pix-pretty's) would chip an image path again.
+function replaceBefore(editor: Editor, count: number, text: string): void {
+  oneUndoStep(editor, () => {
+    for (let i = 0; i < count; i++) editor.handleInput("\x7f");
+    internals(editor).insertTextAtCursorInternal(text);
+  });
+}
+
 // expandChip replaces the marker of paste id with its text, as plain prompt text.
 function expandChip(editor: Editor, id: number, value: Value): void {
   const ed = internals(editor);
@@ -62,24 +72,20 @@ function expandChip(editor: Editor, id: number, value: Value): void {
   const line = ed.state.lines.findIndex((l) => marker.test(l));
   const m = marker.exec(ed.state.lines[line] ?? "");
   if (!m) return;
-  // A marker deletes as one unit from its end.
   ed.state.cursorLine = line;
   ed.state.cursorCol = m.index + m[0].length;
   ed.preferredVisualCol = null;
-  editor.handleInput("\x7f");
-  // Below every insertTextAtCursor patch: chips' own (and pix-pretty's) would chip an image path again.
-  ed.pushUndoSnapshot();
-  ed.insertTextAtCursorInternal(chipText(value));
+  replaceBefore(editor, 1, chipText(value));
 }
 
-// dropChipBefore deletes the chip (and the space after it) that ends at the cursor when it holds
-// the same text as value. Returns false and changes nothing otherwise.
-function dropChipBefore(editor: Editor, value: Value): boolean {
+// replaceChipBefore swaps the chip (and the space after it) that ends at the cursor for its text,
+// when it holds the same text as value. Returns false and changes nothing otherwise.
+function replaceChipBefore(editor: Editor, value: Value): boolean {
   const { state, pastes } = internals(editor);
   const m = /\[paste #(\d+)[^\]]*\]( ?)$/.exec(state.lines[state.cursorLine]?.slice(0, state.cursorCol) ?? "");
   const prev = m && pastes.get(Number(m[1]));
   if (!m || prev === undefined || chipText(prev) !== chipText(value)) return false;
-  for (let i = m[2] ? 2 : 1; i > 0; i--) editor.handleInput("\x7f");
+  replaceBefore(editor, m[2] ? 2 : 1, chipText(value));
   return true;
 }
 
@@ -135,11 +141,7 @@ export default function chips(pi: ExtensionAPI): void {
           last.delete(this);
           if (value === undefined) return original.call(this, data);
           const ed = internals(this);
-          if (previous === raw && dropChipBefore(this, value)) {
-            ed.pushUndoSnapshot();
-            ed.insertTextAtCursorInternal(chipText(value));
-            return;
-          }
+          if (previous === raw && replaceChipBefore(this, value)) return;
           ed.pushUndoSnapshot();
           const id = ++ed.pasteCounter;
           ed.pastes.set(id, value);

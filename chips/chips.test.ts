@@ -103,6 +103,10 @@ test("alone: URL, file and image pastes and a Ctrl+V image become chips, send as
   assert.equal(editor.getExpandedText(), sent);
   assert.equal(await emit("input", { text: sent, images: [] }), undefined, "no pix-pretty tags to unwrap");
 
+  const chipped = editor.getText();
+  rightClick(editor, ICON.image);
+  editor.undo();
+  assert.equal(editor.getText(), chipped, "one undo restores the chip");
   rightClick(editor, ICON.image);
   assert.match(editor.getText(), new RegExp(String.raw`^see \[paste #1 30 chars\] \[paste #2 \d+ chars\] ${dir}/shot\.png \[paste #3 \d+ chars\] \[paste #4 1500 chars\]$`), "a right-click expands the image chip, and its path is not chipped again");
   rightClick(editor, ICON.file);
@@ -160,6 +164,8 @@ test("the same URL pasted twice is one literal copy, with expand-paste above or 
     editor.handleInput("a ");
     for (let i = 0; i < 2; i++) editor.handleInput(paste("https://example.com/x"));
     assert.equal(editor.getText(), "a https://example.com/x", order.join(" over "));
+    editor.undo();
+    assert.match(editor.getText(), /^a \[paste #\d+ 21 chars\] $/, `one undo restores the chip: ${order.join(" over ")}`);
     // expand-paste still quotes a multi-line paste on a quote line.
     editor.setText("> ");
     editor.handleInput("\x1b[F");

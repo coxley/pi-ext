@@ -18,3 +18,20 @@ export function unsupported(ui: Notify, extension: string, gone: string[]): bool
   ui.notify(`${extension}: this Pi version lacks ${gone.join(", ")}; ${extension} is off`, "warning");
   return true;
 }
+
+// oneUndoStep runs edit on a pi-tui Editor as one undo step: it snapshots once, and skips the
+// snapshots that backspaces and insertTextAtCursor push inside edit. pushUndoSnapshot is
+// TS-private; callers list it for missing().
+export function oneUndoStep(editor: object, edit: () => void): void {
+  // SAFETY: pushUndoSnapshot is a runtime method of pi-tui's Editor.
+  const ed = editor as { pushUndoSnapshot?: () => void };
+  ed.pushUndoSnapshot?.();
+  const own = Object.hasOwn(ed, "pushUndoSnapshot") ? ed.pushUndoSnapshot : undefined;
+  ed.pushUndoSnapshot = () => {};
+  try {
+    edit();
+  } finally {
+    if (own) ed.pushUndoSnapshot = own;
+    else delete ed.pushUndoSnapshot;
+  }
+}
