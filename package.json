@@ -1,7 +1,7 @@
 {
   "name": "pi-ext",
   "version": "0.1.0",
-  "description": "Pi prompt editor extensions: chips, annotations, markdown styling, paste and list handling, editor copy",
+  "description": "Pi prompt editor extensions: chips, annotations, markdown styling, paste and list handling, editor copy; and a Rex session sidebar",
   "private": true,
   "type": "module",
   "keywords": ["pi-package"],
@@ -18,7 +18,8 @@
       "./md-prompt/index.ts",
       "./expand-paste/index.ts",
       "./chips/index.ts",
-      "./annotate/index.ts"
+      "./annotate/index.ts",
+      "./sidebar/index.ts"
     ]
   },
   "peerDependencies": {

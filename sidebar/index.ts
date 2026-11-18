@@ -1,16 +1,18 @@
 import { execFile, execFileSync, spawn } from "node:child_process";
-import { mkdirSync, readFileSync, realpathSync, renameSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, realpathSync, renameSync, statSync, utimesSync, watch, writeFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { type Component, HStack, matchesKey, type OverlayHandle, type OverlayOptions, type TuiMouseEvent, type TuiMouseEventResult, TuiAltScreen, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
-import { actionAt, ALIVE_FILE, ARCHIVE_ICON, buildRows, CLOSE_ICON, electReporters, FORK_ICON, type Git, labelOf, lastPrompt, type Live, lua, PIN_ICON, refresherRuns, RELIST_FILE, type Row, rowClicks, type Session, shown, SNAPSHOT_FILE, type Snapshot, spins, STAGE, stageOf, STATE_FILE, statusId, TERM_ICON, toggleCollapsed, type View, windowOf, withSelf } from "./tree.ts";
+import { patch } from "../chips/chips.ts";
+import { missing, unsupported } from "../compat.ts";
+import { actionAt, ALIVE_FILE, ARCHIVE_ICON, buildRows, CLOSE_ICON, electReporters, FORK_ICON, type Git, labelOf, lastPrompt, type Live, lua, openFor, PIN_ICON, refresherRuns, RELIST_FILE, type Row, rowClicks, type Session, shellAfter, shown, SNAPSHOT_FILE, type Snapshot, spins, STAGE, STATE_DIR, stageOf, STATE_FILE, statusId, TERM_ICON, toggleCollapsed, type View, windowOf, withSelf } from "./tree.ts";
 
-// State is shared by every Pi, so a swapped-in Pi draws the same sidebar. seen holds when each
-// session last got terminal focus, so a quitting Pi hands its slot to the most recently seen one.
-type State = { open: boolean; width: number; collapsed: string[]; archived: string[]; pinned: string[]; seen: Record<string, number> };
-const DEFAULT_STATE: State = { open: false, width: 34, collapsed: [], archived: [], pinned: [], seen: {} };
+// State is shared by every Pi. openBy holds each session's own sidebar visibility; open is the
+// default for a session with no entry (see openFor).
+type State = { open: boolean; openBy: Record<string, boolean>; width: number; collapsed: string[]; archived: string[]; pinned: string[] };
+const DEFAULT_STATE: State = { open: false, openBy: {}, width: 34, collapsed: [], archived: [], pinned: [] };
 const REFRESHER = fileURLToPath(new URL("./refresher.ts", import.meta.url));
 const PLACEHOLDER = fileURLToPath(new URL("./placeholder.sh", import.meta.url));
 
@@ -42,6 +44,9 @@ call("session.focus_block", { block_id = P.target })
 return {}
 `;
 const POLL_MS = 1500;
+// ponytail: a fixed wait for the incoming Pi to redraw after it takes this Pi's sidebar state; a
+// slower redraw shows one reflow after the swap. Wait for an ack file if that shows up.
+const ADOPT_MS = 150;
 const SPIN_MS = 500;
 const DOTS = ["   ", "•  ", "•• ", "•••", " ••", "  •"];
 
@@ -72,27 +77,6 @@ const rexCall = async (method: string, args: Record<string, unknown>): Promise<R
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const b64 = (s: string) => Buffer.from(s.replace(/[\x00-\x1f\x7f-\x9f]/g, " ")).toString("base64");
 
-// patch replaces obj[name] with make(original) and returns a restore. A restore under a later
-// patch cannot unwire, so it turns the wrapper into a pass-through: after a reload, a buried
-// wrapper must not touch its stale ctx. (Same as extensions/annotate.)
-function patch<T, K extends keyof T>(obj: T, name: K, make: (original: T[K]) => T[K]): () => void {
-  type Fn = (this: unknown, ...args: unknown[]) => unknown;
-  const original = obj[name];
-  const wrapped = make(original);
-  let active = true;
-  // SAFETY: every patched slot is a method, so original and wrapped are callable.
-  const call = (fn: T[K], self: unknown, args: unknown[]) => (fn as unknown as Fn).apply(self, args);
-  // SAFETY: patched has the slot's call signature; it forwards this and every argument.
-  const patched = function (this: unknown, ...args: unknown[]) {
-    return call(active ? wrapped : original, this, args);
-  } as unknown as T[K];
-  obj[name] = patched;
-  return () => {
-    active = false;
-    if (obj[name] === patched) obj[name] = original;
-  };
-}
-
 // devArgs are this Pi's -e flags, so a Pi the sidebar starts loads the same dev extensions.
 function devArgs(): string[] {
   const argv = process.argv.slice(2);
@@ -106,6 +90,7 @@ export default function sidebar(pi: ExtensionAPI): void {
   const rexSession = process.env.REX_SESSION;
   const rexBlock = process.env.REX_BLOCK;
   let ctx: ExtensionContext | undefined;
+  const me = () => ctx?.sessionManager.getSessionId();
   let tui: Screen | undefined;
   let restore: (() => void)[] = [];
   let timers: ReturnType<typeof setInterval>[] = [];
@@ -172,7 +157,9 @@ export default function sidebar(pi: ExtensionAPI): void {
   // this Pi is their elected reporter. A record this Pi stops reporting is cleared.
   const report = (pis: Live[]) => {
     const next = new Map<string, string>();
-    const mine = state.open && rexBlock ? (electReporters(pis).get(rexBlock) ?? []) : [];
+    // Only a placed Pi with its sidebar open reports others.
+    const reporters = pis.filter((p) => !p.placed || openFor(state, p.sessionId));
+    const mine = openFor(state, me()) && rexBlock ? (electReporters(reporters).get(rexBlock) ?? []) : [];
     for (const sessionId of mine) {
       const rec = live.get(sessionId)?.root;
       if (!rec) continue;
@@ -194,7 +181,7 @@ export default function sidebar(pi: ExtensionAPI): void {
   let syncing = false;
   const sync = async () => {
     if (syncing) return;
-    if (!loadState().open) return reported.size ? report([]) : undefined;
+    if (!openFor(loadState(), me())) return reported.size ? report([]) : undefined;
     syncing = true;
     try {
       const now = new Date();
@@ -227,9 +214,10 @@ export default function sidebar(pi: ExtensionAPI): void {
   //  2. Swap this Pi with blockId across tabs.
   //  3. Detach this Pi, and any Pi a failed switch left in STAGE.
   //  4. Focus blockId.
-  // A Pi keeps its last size on screen, and the slot is the same, so nothing reflows. A blockId
-  // that already shows is only focused; in another tab, the Rex app is asked to show that tab.
-  const place = async (blockId: string) => {
+  // A Pi keeps its last size on screen, and the slot is the same, so nothing reflows. Before the
+  // swap, sessionId's Pi takes this Pi's sidebar visibility, so the layout does not change either.
+  // A blockId that already shows is only focused; in another tab, the Rex app is asked to show that tab.
+  const place = async (blockId: string, sessionId: string) => {
     const view = (await rexCall("session.view", { session_id: rexSession })) as View;
     // The snapshot lags a switch by up to a poll: only the view tells whether blockId shows now.
     if (shown(view, blockId)) {
@@ -238,6 +226,7 @@ export default function sidebar(pi: ExtensionAPI): void {
       if (windowId !== windowOf(view, rexBlock)) await showSession(rexSession as string, windowId).catch(() => {});
       return void (await rexCall("session.focus_block", { session_id: rexSession, block_id: blockId }));
     }
+    if (adopt(sessionId)) await sleep(ADOPT_MS);
     await run("rex", ["do", "-", "--json"], placeScript(view, blockId));
   };
   // placeScript is the PLACE_LUA run that swaps blockId in for this Pi.
@@ -246,26 +235,13 @@ export default function sidebar(pi: ExtensionAPI): void {
     const P = { sid: rexSession, me: rexBlock, target: blockId, anchor: stage?.anchor, staged: !!stage?.pis.includes(blockId), old: stage?.pis.filter((b) => b !== blockId) ?? [] };
     return `local P = ${lua(P)}\n${PLACE_LUA}`;
   };
-  // handOff gives this Pi's slot to the most recently seen Pi at rest in this Rex session, so
-  // quitting does not close the pane. It runs only while this Pi shows, and synchronously: Pi
-  // exits right after its shutdown handlers.
-  const handOff = () => {
-    const call = (method: string, args: Record<string, unknown>) => JSON.parse(execFileSync("rex", ["api", "call", method, JSON.stringify(args)], { encoding: "utf8", timeout: 3000 }) || "{}");
-    try {
-      const view = call("session.view", { session_id: rexSession }) as View;
-      if (!rexBlock || !shown(view, rexBlock)) return;
-      const seen = loadState().seen;
-      const blocks = call("session.list_blocks", { session_id: rexSession }).blocks as { block_id: string; label?: string }[];
-      const rest = blocks.filter((b) => b.label?.startsWith("pi:") && b.block_id !== rexBlock && !shown(view, b.block_id));
-      const next = rest.sort((a, b) => (seen[b.label?.slice(3) ?? ""] ?? 0) - (seen[a.label?.slice(3) ?? ""] ?? 0))[0];
-      if (!next) return;
-      execFileSync("rex", ["do", "-", "--json"], { input: placeScript(view, next.block_id), timeout: 3000 });
-      // A shell that started this Pi stays behind in the now detached block: close it once Pi is gone.
-      const args = JSON.stringify({ session_id: rexSession, block_id: rexBlock });
-      spawn("sh", ["-c", `sleep 3; exec rex api call block.close '${args}'`], { detached: true, stdio: "ignore" }).unref();
-    } catch {
-      // Quitting must not fail on Rex.
-    }
+  // adopt gives sessionId this Pi's sidebar visibility, and tells whether that changed it.
+  const adopt = (sessionId: string) => {
+    const st = loadState();
+    const mine = openFor(st, me());
+    if (openFor(st, sessionId) === mine) return false;
+    saveState({ openBy: { ...st.openBy, [sessionId]: mine } });
+    return true;
   };
   // showSession asks the user's Rex app to show another Rex session (needs Remote Control).
   const showSession = async (sessionId: string, windowId?: string) => {
@@ -280,7 +256,8 @@ export default function sidebar(pi: ExtensionAPI): void {
     const size = tui ? { columns: tui.terminal.columns, rows: tui.terminal.rows } : undefined;
     // The new Pi shares this Pi's state dir; Rex block options take no environment.
     const xdg = process.env.XDG_STATE_HOME ? ["/usr/bin/env", `XDG_STATE_HOME=${process.env.XDG_STATE_HOME}`] : [];
-    const command = [...xdg, process.execPath, process.argv[1], ...devArgs(), ...args];
+    // A login shell in cwd follows Pi in the block, so quitting Pi leaves a shell, not a closed pane.
+    const command = shellAfter([...xdg, process.execPath, process.argv[1], ...devArgs(), ...args]);
     // The login shell supplies the user's environment; the absolute command needs no PATH.
     const made = await rexCall("session.new_block", { session_id: rexSession, flavor: SHELL, label: "pi", options: { command, cwd, ...(size ? { size } : {}) } });
     const blockId = made.block_id as string;
@@ -290,16 +267,16 @@ export default function sidebar(pi: ExtensionAPI): void {
       const list = (await rexCall("session.list_blocks", { session_id: rexSession })) as { blocks?: { block_id: string; label?: string }[] };
       const b = list.blocks?.find((x) => x.block_id === blockId);
       if (!b) throw new Error("the new Pi exited");
-      if (b.label?.startsWith("pi:")) return place(blockId);
+      if (b.label?.startsWith("pi:")) return place(blockId, b.label.slice(3));
     }
     await rexCall("block.close", { session_id: rexSession, block_id: blockId }).catch(() => {});
     throw new Error("the new Pi did not start in 20s");
   };
   const switchTo = async (s: Session) => {
-    if (s.id === ctx?.sessionManager.getSessionId()) return;
+    if (s.id === me()) return;
     const target = live.get(s.id);
     if (!target) return startPi(s.cwd, ["--session", s.path]);
-    if (target.rexSession === rexSession) return place(target.blockId);
+    if (target.rexSession === rexSession) return place(target.blockId, s.id);
     let windowId = target.windowId;
     if (!target.placed) {
       // A detached block needs a window: open one with a stand-in, move the block beside it, close the stand-in.
@@ -535,17 +512,19 @@ export default function sidebar(pi: ExtensionAPI): void {
     if (current >= 0) cursor = current;
     tui.setFocus(view);
   };
-  // toggle: closed -> open and focused; open -> focused; focused -> closed.
+  // toggle: closed -> open and focused; open -> focused; focused -> closed. It sets this Pi's
+  // session only, and the default for Pis with no state of their own.
   function toggle() {
     const st = loadState();
-    if (!st.open) {
-      saveState({ open: true });
+    const set = (open: boolean) => saveState({ open, openBy: { ...st.openBy, [me() ?? ""]: open } });
+    if (!openFor(st, me())) {
+      set(true);
       void sync();
       return focus();
     }
     if (!view.focused) return focus();
     blur();
-    saveState({ open: false });
+    set(false);
   }
 
   pi.registerShortcut("ctrl+/", { description: "Toggle the session sidebar", handler: () => toggle() });
@@ -562,6 +541,7 @@ export default function sidebar(pi: ExtensionAPI): void {
     for (const r of restore) r();
     restore = [];
     if (c.mode !== "tui") return;
+    if (unsupported(c.ui, "sidebar", missing(TuiAltScreen?.prototype, ["doRender", "handleMouseEvent", "handleViewportInput", "requestRender", "getFocusedComponent", "setFocus", "showOverlay"]))) return;
     ctx = c;
     // SAFETY: the cast names a prototype slot of the public TuiAltScreen; Screen lists the private fields used.
     const screen = TuiAltScreen.prototype as unknown as ScreenProto;
@@ -574,7 +554,7 @@ export default function sidebar(pi: ExtensionAPI): void {
           if (current !== wrapped?.stack) piRoot = current;
           const st = loadState();
           let want = piRoot;
-          if (st.open && piRoot && this.terminal.columns >= st.width + 40) {
+          if (openFor(st, me()) && piRoot && this.terminal.columns >= st.width + 40) {
             if (wrapped?.root !== piRoot || wrapped.width !== st.width) {
               const stack = new HStack([
                 { component: view, basis: st.width, shrink: 0 },
@@ -595,7 +575,7 @@ export default function sidebar(pi: ExtensionAPI): void {
       // A pointer that leaves the sidebar drops the tooltip before the event reaches what is under it.
       patch(screen, "handleMouseEvent", (original) =>
         function (this: Screen, raw: RawMouse) {
-          if (!state.open || raw.x >= state.width) {
+          if (!openFor(state, me()) || raw.x >= state.width) {
             if (hover) hideTip();
             if (hoverAt !== undefined) {
               hoverAt = undefined;
@@ -611,13 +591,19 @@ export default function sidebar(pi: ExtensionAPI): void {
           if (data === "\x1b[I" || data === "\x1b[O") {
             focused = data === "\x1b[I";
             markSeen();
-            const id = ctx?.sessionManager.getSessionId();
-            if (focused && id) saveState({ seen: { ...loadState().seen, [id]: Date.now() } });
           }
           return original.call(this, data);
         },
       ),
     ];
+    // Another Pi can change this Pi's sidebar state (a switch to it): redraw at once, also while detached.
+    mkdirSync(STATE_DIR, { recursive: true });
+    const watcher = watch(STATE_DIR, { persistent: false }, (_event, name) => {
+      if (name && name !== "state.json") return;
+      const was = openFor(state, me());
+      if (was || openFor(loadState(), me())) tui?.requestRender();
+    });
+    restore.push(() => watcher.close());
     // The label tells the sidebar this Pi is live. It is set after the first snapshot read, so a
     // Pi the sidebar starts is swapped in with its tree already drawn.
     void sync().then(() => {
@@ -628,7 +614,7 @@ export default function sidebar(pi: ExtensionAPI): void {
       setInterval(() => void sync(), POLL_MS),
       // The dots animate only on screen, and only for another working session the sidebar shows.
       setInterval(() => {
-        if (!state.open || !placed || !spins(rows, ctx?.sessionManager.getSessionId(), (id) => live.get(id)?.root?.state === "working")) return;
+        if (!openFor(state, me()) || !placed || !spins(rows, me(), (id) => live.get(id)?.root?.state === "working")) return;
         frame++;
         tui?.requestRender();
       }, SPIN_MS),
@@ -653,7 +639,7 @@ export default function sidebar(pi: ExtensionAPI): void {
     timers = [];
     blur();
     hideTip();
-    state = { ...state, open: false };
+    state = { ...state, open: false, openBy: {} };
     report([]);
     for (const r of restore) r();
     restore = [];
@@ -665,7 +651,6 @@ export default function sidebar(pi: ExtensionAPI): void {
     wrapped = undefined;
     // A shell left in this block after Pi quits must not look like a live Pi.
     if (event.reason === "quit" && rexSession && rexBlock) {
-      handOff();
       try {
         execFileSync("rex", ["api", "call", "session.set_block_label", JSON.stringify({ session_id: rexSession, block_id: rexBlock, label: "" })], { timeout: 2000 });
       } catch {

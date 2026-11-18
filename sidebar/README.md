@@ -7,6 +7,8 @@ shows up at once.
 ## Use
 
 - `ctrl+/`: if the sidebar is closed, open it and focus it. If it is open, focus it. If it is focused, close it.
+  This shows or hides the sidebar in this Pi only. A Pi with no choice of its own uses the last one made in any Pi.
+  A switch gives the incoming Pi the outgoing Pi's choice, so the pane keeps its layout.
 - `/sidebar` does the same. `/sidebar width N` sets the width (16 to 80 columns).
 - When the sidebar has focus: `up`/`down` (or `k`/`j`) move. `enter` or `space` opens the row.
   `left`/`right` (or `h`/`l`) collapse and expand folders. `escape` gives focus back to the prompt.
@@ -17,8 +19,8 @@ shows up at once.
   Pinning un-archives a session, and archiving un-pins it.
 - Directory (repo, worktree, plain folder) action, in the pin's column: `t` / `\u{F018D}` opens a shell in the folder's directory, in a Rex split to the right of this Pi.
 - A click on a row opens it, with or without focus. The mouse wheel scrolls the sidebar.
-- Quitting a shown Pi (`ctrl+c` twice, `ctrl+d`, `/quit`) hands its pane to the most recently focused Pi at rest in the same Rex session.
-  With none, the pane closes as usual.
+- Quitting a Pi (`ctrl+c` twice, `ctrl+d`, `/quit`) leaves a shell in its pane, in the session's directory.
+  A Pi you started from a shell returns to that shell. A Pi the sidebar started runs as `sh -c '"$@"; exec "$SHELL" -l'`, so a login shell follows it.
 - When the pointer is over a session row, a tooltip beside the sidebar shows the last prompt sent in that session.
   This needs hover (motion) mouse events. pi-tui turns them off under tmux, zellij, and screen; there, no tooltip shows.
 
@@ -49,20 +51,21 @@ Rows:
   A target that already shows is only focused. A Pi keeps its last size on screen, so a switch within one slot does not reflow.
 - A block in another Rex session: a detached block first gets a new tab (with a stand-in block that closes again).
   Then `client.perform session.select` and `focus_block` run. This needs Rex Remote Control.
-- With no live block, the sidebar starts this Pi's build (`process.execPath` + `argv[1]`, the same `-e` flags, and `--session <file>`) in a detached block, at this Pi's size.
+- With no live block, the sidebar starts this Pi's build (`process.execPath` + `argv[1]`, the same `-e` flags, and `--session <file>`) in a detached block, at this Pi's size, followed by a login shell (`shellAfter`).
   It waits until that Pi labels itself, then swaps it in.
 - Status for a detached Pi has no tab, so Rex cannot show it. The sidebar reports it again as an OSC 7501 child record `session/<id-without-dashes>` from one visible Pi.
   That Pi is the lowest-ID placed Pi in the same Rex session, or else the lowest-ID placed Pi on the server.
-  This happens only while the sidebar is open. A visible Pi's own status is Pi's built-in root record.
-- Shared state (open, width, collapsed folders, archived IDs): `${XDG_STATE_HOME:-~/.local/state}/pi-sidebar/state.json`.
-  Each Pi reads it again when its mtime changes, so all Pis draw the same sidebar.
+  Only placed Pis with the sidebar open report. A visible Pi's own status is Pi's built-in root record.
+- Shared state (default and per-session visibility, width, collapsed folders, pinned and archived IDs): `${XDG_STATE_HOME:-~/.local/state}/pi-sidebar/state.json`.
+  Each Pi watches it and reads it again when it changes, so all Pis draw the same tree. A switch writes the incoming session's visibility,
+  waits 150 ms for that Pi to redraw while detached, then swaps.
 - Layout: a patch on `TuiAltScreen.prototype.doRender` wraps Pi's layout root as `HStack([sidebar, root])` while the sidebar is open.
   If Pi sets a new root, it gets wrapped again. On `session_shutdown`, the patch becomes a pass-through and the root is unwrapped, so `/reload` is safe.
 
 ## Dev and test
 
 ```sh
-cd ~/.pi/agent/extensions/sidebar
+cd sidebar   # in the pi-ext checkout
 node --test *.test.ts
 
 # Live: run Pi in your own Rex tab from a temp dir, with a separate state dir.

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
-import { actionAt, ARCHIVE_AFTER_MS, buildRows, electReporters, type Git, labelOf, lastPrompt, parseGit, type Row, rowClicks, type Session, lua, shown, spins, stageOf, statusId, toggleCollapsed, unknownCwds, windowOf, withSelf } from "./tree.ts";
+import { actionAt, ARCHIVE_AFTER_MS, buildRows, electReporters, type Git, labelOf, lastPrompt, openFor, parseGit, type Row, rowClicks, type Session, lua, shellAfter, shown, spins, stageOf, statusId, toggleCollapsed, unknownCwds, windowOf, withSelf } from "./tree.ts";
 
 const NOW = 1_000 * ARCHIVE_AFTER_MS;
 const s = (id: string, cwd: string, ageMs: number, extra: Partial<Session> = {}): Session => ({ id, path: `/s/${id}.jsonl`, cwd, created: NOW - ageMs, modified: NOW - ageMs, ...extra });
@@ -200,4 +204,19 @@ test("withSelf shows this Pi's session with its live name, listed or not", () =>
   const self = s("me", "/x", 0, { name: "new" });
   assert.deepEqual(withSelf(listed, self), [{ ...listed[0], name: "new" }, listed[1]], "the listed row keeps its times, takes the new name");
   assert.deepEqual(withSelf([listed[1]], self), [listed[1], self], "a session with no file yet is added");
+});
+
+test("openFor takes a session's own sidebar state, else the default", () => {
+  const st = { open: true, openBy: { small: false } };
+  assert.equal(openFor(st, "small"), false);
+  assert.equal(openFor(st, "other"), true);
+  assert.equal(openFor({ open: false }, undefined), false, "an old state file has no openBy");
+});
+
+test("shellAfter runs the command, then a login shell in the same directory, even when the command fails", () => {
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "sidebar-")));
+  const env = { PATH: process.env.PATH, SHELL: "/bin/sh" };
+  const [cmd, ...args] = shellAfter(["/bin/sh", "-c", "echo pi ran; exit 3"]);
+  // The login shell reads the script from stdin, as an interactive one reads keys.
+  assert.equal(execFileSync(cmd, args, { cwd: dir, env, input: "echo shell in $PWD\n", encoding: "utf8" }), `pi ran\nshell in ${dir}\n`);
 });

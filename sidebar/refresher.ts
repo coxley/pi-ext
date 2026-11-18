@@ -7,7 +7,7 @@
 import { execFile } from "node:child_process";
 import { closeSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync, writeSync } from "node:fs";
 import { pathToFileURL } from "node:url";
-import { ALIVE_FILE, type Git, LOCK_FILE, LOCK_STALE_MS, type Live, parseGit, type Rec, RELIST_FILE, type Session, SNAPSHOT_FILE, type Snapshot, STAGE, STATE_DIR, STATE_FILE, unknownCwds } from "./tree.ts";
+import { ALIVE_FILE, type Git, LOCK_FILE, LOCK_STALE_MS, type Live, parseGit, type Rec, RELIST_FILE, type Session, SNAPSHOT_FILE, type Snapshot, STAGE, STATE_DIR, unknownCwds } from "./tree.ts";
 
 const POLL_MS = 1500;
 const SESSIONS_MS = 10_000;
@@ -89,13 +89,8 @@ const holds = () => {
     return false;
   }
 };
-const sidebarOpen = () => {
-  try {
-    return JSON.parse(readFileSync(STATE_FILE, "utf8")).open === true;
-  } catch {
-    return false;
-  }
-};
+// sidebarOpen tells whether some Pi has its sidebar open: each one touches ALIVE_FILE every poll.
+const sidebarOpen = () => Date.now() - mtimeOf(ALIVE_FILE) < 3 * POLL_MS;
 
 async function pollPis(): Promise<Live[]> {
   const out: Poll = JSON.parse(await run("rex", ["do", "-", "--json"], POLL_LUA));
@@ -117,7 +112,7 @@ const mtimeOf = (path: string) => {
   try {
     return statSync(path).mtimeMs;
   } catch {
-    return 0; // No Pi renamed a session yet.
+    return 0; // No such file yet.
   }
 };
 

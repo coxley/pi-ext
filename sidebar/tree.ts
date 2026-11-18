@@ -156,6 +156,14 @@ export type Live = PiBlock & { windowId?: string; root?: Rec };
 // Snapshot is the refresher's output. git caches every cwd ever seen (null: not a git dir).
 export type Snapshot = { sessions: Session[]; git: Record<string, Git | null>; pis: Live[] };
 
+// openFor tells whether the sidebar shows in sessionId's Pi: its own entry in openBy, else open,
+// the default that follows the last toggle.
+export const openFor = (st: { open: boolean; openBy?: Record<string, boolean> }, sessionId: string | undefined) => st.openBy?.[sessionId ?? ""] ?? st.open;
+
+// shellAfter wraps command so that a login shell starts in the same directory once it exits, for
+// any exit status: quitting a Pi the sidebar started leaves a shell in its block.
+export const shellAfter = (command: string[]) => ["/bin/sh", "-c", '"$@"; exec "${SHELL:-/bin/sh}" -l', "sh", ...command];
+
 // withSelf puts this Pi's own session into a listed snapshot with its live name, so a rename
 // shows at once. A session with no file yet (no reply so far) is not listed: self is added.
 export const withSelf = (sessions: Session[], self: Session) =>

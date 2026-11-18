@@ -1,6 +1,6 @@
 # pi-ext
 
-Prompt editor extensions for [Pi](https://pi.dev): one package, five extensions.
+Prompt editor extensions for [Pi](https://pi.dev), and a session sidebar for Pi in Rex.
 
 | Extension | What it does |
 |---|---|
@@ -9,8 +9,9 @@ Prompt editor extensions for [Pi](https://pi.dev): one package, five extensions.
 | [`expand-paste`](expand-paste/README.md) | The same paste twice in a row expands to editable text. Pastes lose shared indentation. `> ` quotes and list items (`- `, `1. `, `- [ ] `) continue on a new line; tab and shift+tab nest list items. |
 | `md-prompt` | Styles markdown in the prompt as you type: headings, quotes, lists, code, bold, italic, links. |
 | `editor-copy` | A mouse selection inside the prompt copies the prompt text: no frame characters, no wrap newlines, pastes as their content. A transcript selection (copy or annotate quote) joins soft-wrapped rows but keeps each list item, quote row, and code line on its own line. |
+| [`sidebar`](sidebar/README.md) | A session tree left of the transcript (`ctrl+/`). It switches between Pis by swapping Rex blocks, shows their status, and starts Pis for cold sessions. Quitting a Pi leaves a shell in its pane. Needs Rex; without it, the tree shows but cannot switch. |
 
-`annotate` uses `chips` and `editor-copy`, and `chips` uses `editor-copy` and `md-prompt`, so the package loads all five.
+`annotate` uses `chips` and `editor-copy`, and `chips` uses `editor-copy` and `md-prompt`, so the package loads all of them.
 
 ## Install
 
