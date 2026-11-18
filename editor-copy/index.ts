@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Container, Editor, sliceByColumn, stripTerminalSequences, TuiAltScreen, visibleWidth } from "@earendil-works/pi-tui";
 import { missing, unsupported } from "../compat.ts";
-import { editorRange, expandMarkers, type Point, type View } from "./copy.ts";
+import { editorRange, expandMarkers, type Point, type View, unwrapRows } from "./copy.ts";
 
 type Rect = { x: number; y: number; width: number; height: number };
 export type Box = { component: unknown; rect: Rect; lineOffset: number; children: Box[] };
@@ -69,8 +69,8 @@ function editorSelectionText(screen: Screen): string | undefined {
 
 // editor-copy makes a fullscreen selection inside the prompt editor copy the editor's text:
 // no frame characters, no wrap newlines, and paste pills as their content. Other selections
-// copy as before. The hook wraps TuiAltScreen's two copy methods, so a getActiveSelectionText
-// patch (pi-copy-soft-wrap) still applies outside the editor.
+// read through getActiveSelectionText, which it patches to join soft-wrapped rows (unwrapRows),
+// so copies and annotate quotes keep one line per paragraph or list item.
 export default function editorCopy(pi: ExtensionAPI): void {
   let restore: (() => void) | undefined;
 
@@ -78,21 +78,31 @@ export default function editorCopy(pi: ExtensionAPI): void {
     restore?.();
     restore = undefined;
     if (ctx.mode !== "tui") return;
-    const screenMethods = ["copySelectionToClipboard", "copyActiveSelectionToClipboard", "getSelectionBounds", "copyTextToClipboard"];
+    const screenMethods = ["copySelectionToClipboard", "copyActiveSelectionToClipboard", "getActiveSelectionText", "getSelectionBounds", "copyTextToClipboard"];
     if (unsupported(ctx.ui, "editor-copy", [...missing(TuiAltScreen?.prototype, screenMethods), ...missing(Editor.prototype, ["layoutText", "getLines"])])) return;
-    // SAFETY: both methods are public; the cast only names the prototype slots.
-    const proto = TuiAltScreen.prototype as unknown as Record<"copySelectionToClipboard" | "copyActiveSelectionToClipboard", (this: Screen) => Promise<boolean>>;
-    const names = ["copySelectionToClipboard", "copyActiveSelectionToClipboard"] as const;
+    // SAFETY: these methods are public; the cast only names the prototype slots.
+    const proto = TuiAltScreen.prototype as unknown as Record<string, (this: Screen) => unknown>;
     let active = true;
-    const patches = names.map((name) => {
+    const wrap = (name: string, patched: (this: Screen, original: (this: Screen) => unknown) => unknown) => {
       const original = proto[name];
-      const patched = function (this: Screen): Promise<boolean> {
-        const text = active ? editorSelectionText(this) : undefined;
-        return text === undefined ? original.call(this) : this.copyTextToClipboard(text);
+      const fn = function (this: Screen) {
+        return active ? patched.call(this, original) : original.call(this);
       };
-      proto[name] = patched;
-      return { name, original, patched };
-    });
+      proto[name] = fn;
+      return { name, original, patched: fn };
+    };
+    const copy = function (this: Screen, original: (this: Screen) => unknown) {
+      const text = editorSelectionText(this);
+      return text === undefined ? original.call(this) : this.copyTextToClipboard(text);
+    };
+    const patches = [
+      wrap("copySelectionToClipboard", copy),
+      wrap("copyActiveSelectionToClipboard", copy),
+      wrap("getActiveSelectionText", function (original) {
+        const text = original.call(this) as string | undefined;
+        return text === undefined ? undefined : unwrapRows(text, this.getSelectionBounds()?.start.col);
+      }),
+    ];
     // A later patch by another extension stays in place; this one then passes through.
     restore = () => {
       active = false;

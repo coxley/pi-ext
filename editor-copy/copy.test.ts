@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { test } from "node:test";
 import { host } from "../test-host.ts";
-import { editorRange, expandMarkers } from "./copy.ts";
+import { editorRange, expandMarkers, unwrapRows } from "./copy.ts";
 
 const { Container, Editor, TuiAltScreen } = await host("@earendil-works/pi-tui/dist/index.js");
 
@@ -31,6 +31,43 @@ test("editorRange maps screen points to text offsets across wraps, frames and sh
   assert.equal(pick({ row: 1, col: 2 }, { row: 1, col: 5, boundary: true }), "hel");
 });
 
+// Transcript rows as drawn: a one-column gutter, then pi-better-render or pi-tui markdown.
+const drawn = [
+  "• Expansion: expandPasteMarkers sends a file as <path>abs</path> and an",
+  "  image as its path.",
+  "• Ctrl+V image: turns the temp path into a chip.",
+  "  ◦ nested item that wraps onto",
+  "    a second row",
+  "",
+  "With pix-pretty installed, the old",
+  "behavior is the same.",
+];
+const list = drawn.map((r) => ` ${r}`);
+const unwrapped = [
+  "• Expansion: expandPasteMarkers sends a file as <path>abs</path> and an image as its path.",
+  "• Ctrl+V image: turns the temp path into a chip.",
+  "  ◦ nested item that wraps onto a second row",
+  "",
+  "With pix-pretty installed, the old behavior is the same.",
+].join("\n");
+
+test("unwrapRows joins soft wraps and keeps list, quote and code breaks", () => {
+  const cases: [string[], string][] = [
+    [drawn, unwrapped],
+    [["- [x] done task that", "      wraps", "2. next", "   item"], "- [x] done task that wraps\n2. next item"],
+    [["☐ todo that", "  wraps", "☑ done"], "☐ todo that wraps\n☑ done"],
+    [["▎ quoted", "▎ quote", "│ border"], "▎ quoted\n▎ quote\n│ border"],
+    [["const a = 1;", "const b = 2;"], "const a = 1;\nconst b = 2;"],
+    [["see https://example.com/a/", "b/c now"], "see https://example.com/a/b/c now"],
+  ];
+  for (const [rows, want] of cases) {
+    assert.equal(unwrapRows(rows.map((r) => ` ${r}`).join("\n")), want, `outputPad 1: ${rows[0]}`);
+    assert.equal(unwrapRows(rows.join("\n")), want, `outputPad 0: ${rows[0]}`);
+    assert.equal(unwrapRows([rows[0], ...rows.slice(1).map((r) => ` ${r}`)].join("\n"), 1), want, `from the first marker: ${rows[0]}`);
+  }
+  assert.equal(unwrapRows("start\n more", 9), "start more", "a partial first row");
+});
+
 test("the extension copies editor text, not the frame, and leaves other selections alone", async () => {
   const { loadExtensions } = await host("@earendil-works/pi-coding-agent/dist/core/extensions/loader.js");
   const { extensions, errors } = await loadExtensions([resolve(import.meta.dirname, "index.ts")], tmpdir());
@@ -39,7 +76,13 @@ test("the extension copies editor text, not the frame, and leaves other selectio
     for (const h of extensions[0].handlers.get(type) ?? []) await h({ type }, { mode: "tui", ui: {} });
   };
   const original = TuiAltScreen.prototype.copySelectionToClipboard;
+  const originalText = TuiAltScreen.prototype.getActiveSelectionText;
   await emit("session_start");
+  const transcript = Object.assign(Object.create(TuiAltScreen.prototype), {
+    previousScreen: list,
+    getSelectionBounds: () => ({ start: { row: 0, col: 0 }, end: { row: list.length - 1, col: 80 } }),
+  });
+  assert.equal(transcript.getActiveSelectionText(), unwrapped, "transcript selections unwrap");
 
   const tui = { requestRender() {}, terminal: { rows: 30, columns: 80 } };
   const theme = { borderColor: (s: string) => s, selectList: {} };
@@ -83,4 +126,5 @@ test("the extension copies editor text, not the frame, and leaves other selectio
 
   await emit("session_shutdown");
   assert.equal(TuiAltScreen.prototype.copySelectionToClipboard, original);
+  assert.equal(TuiAltScreen.prototype.getActiveSelectionText, originalText);
 });

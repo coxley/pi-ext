@@ -8,7 +8,7 @@ Prompt editor extensions for [Pi](https://pi.dev): one package, five extensions.
 | `annotate` | Select transcript text with the mouse to add a comment. The quote and comment go in the prompt as an `annotation N` chip; click the chip to edit it. |
 | [`expand-paste`](expand-paste/README.md) | The same paste twice in a row expands to editable text. Pastes lose shared indentation. `> ` quotes and list items (`- `, `1. `, `- [ ] `) continue on a new line; tab and shift+tab nest list items. |
 | `md-prompt` | Styles markdown in the prompt as you type: headings, quotes, lists, code, bold, italic, links. |
-| `editor-copy` | A mouse selection inside the prompt copies the prompt text: no frame characters, no wrap newlines, pastes as their content. |
+| `editor-copy` | A mouse selection inside the prompt copies the prompt text: no frame characters, no wrap newlines, pastes as their content. A transcript selection (copy or annotate quote) joins soft-wrapped rows but keeps each list item, quote row, and code line on its own line. |
 
 `annotate` uses `chips` and `editor-copy`, and `chips` uses `editor-copy` and `md-prompt`, so the package loads all five.
 
@@ -29,7 +29,8 @@ Then `/reload`, or start Pi again. `pi update --extensions` pulls new commits. T
 ## Other extensions
 
 - Works alone. With `@xynogen/pix-pretty` (pix-display) installed, chips also labels its prompt and skill chips, and pix-pretty's own expansion sends text pastes as `<paste>…</paste>`.
-- Works with `pi-open-tui`'s editor frame.
+- Works with `pi-open-tui`'s editor frame, and with `pi-better-render` bullets (`• ◦ ▪ ☐ ☑`) and quote bars (`▎`).
+- Replaces `pi-copy-soft-wrap`. Do not install both: it joins list items into one line.
 
 What the model receives on submit:
 

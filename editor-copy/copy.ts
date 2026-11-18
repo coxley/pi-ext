@@ -64,3 +64,44 @@ export function editorRange(view: View, start: Point, end: Point, width: (s: str
   };
   return [offset(start, false), offset(end, true)];
 }
+
+// A list item's marker, with an optional task box, as pi-tui or pi-better-render draws it.
+const ITEM = /^\s*(?:[-*+•◦▪☐☑]|\d+[.)])\s+(?:[☐☑]\s+|\[[ x]\]\s+)?/;
+// Rows that start a list item, quote, table, heading, rule, or fence.
+const BLOCK = /^\s*(?:#{1,6}\s|[-*+•◦▪☐☑]\s|\d+[.)]\s|[>│▎┃┌├└╭╰─|]|```|~~~)/;
+const CODE = /^\s*(?:import|export|const|let|var|function|class|interface|type|if|else|for|while|switch|case|return|throw|try|catch)\b|[{};]\s*$/;
+
+// unwrapRows joins the screen rows of a selection that are soft wraps of one line. Inside a list
+// item, only rows at the item's hanging indent join it. Elsewhere it keeps a break at block
+// starts, indented code, and code-like rows. Blank rows always break. startCol is the screen
+// column of the first row; it aligns that row with the rest. When every row has a leading space
+// (Pi's outputPad gutter), the rows lose it. URLs and paths join without a space.
+// Adapted from pi-copy-soft-wrap (MIT, Hasan Burak Taşyürek).
+export function unwrapRows(text: string, startCol = 0): string {
+  const raw = text.split("\n");
+  const cols = [" ".repeat(startCol) + raw[0], ...raw.slice(1)];
+  const gutter = cols.every((row) => !row.trim() || row.startsWith(" ")) ? 1 : 0;
+  const rows = cols.map((row) => row.slice(gutter));
+  let hang = rows[0].match(ITEM)?.[0].length ?? -1;
+  let out = startCol > 0 ? raw[0] : rows[0];
+  for (let i = 1; i < rows.length; i++) {
+    const [left, right] = [rows[i - 1], rows[i]];
+    const lead = right.length - right.trimStart().length;
+    const join =
+      !!left.trim() &&
+      !!right.trim() &&
+      !BLOCK.test(right) &&
+      (hang >= 0 ? lead === hang : !BLOCK.test(left) && lead < 4 && !CODE.test(left) && !CODE.test(right));
+    const item = right.match(ITEM)?.[0].length;
+    hang = item ?? (join ? hang : -1);
+    if (!join) {
+      out += `\n${right}`;
+      continue;
+    }
+    const tail = left.trimEnd().match(/\S+$/)?.[0] ?? "";
+    const head = right.trimStart();
+    const tight = /^(?:https?:\/\/|www\.)/.test(tail) || (/[/._?&=#%+-]$/.test(tail) && /^[\w/._?&=#%+-]/.test(head));
+    out += (tight ? "" : " ") + head;
+  }
+  return out;
+}
