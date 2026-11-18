@@ -12,7 +12,8 @@ test("a refresher that cannot start rex exits and frees its lock, so a Pi in Rex
   mkdirSync(state);
   // A Pi with its sidebar open touched alive just now.
   writeFileSync(join(state, "alive"), "");
-  const env = { PATH: "/usr/bin:/bin", HOME: dir, XDG_STATE_HOME: dir, PI_CODING_AGENT_DIR: join(dir, "agent") };
+  // An empty PATH: no rex (Linux installs it in /usr/bin). node runs by its absolute path.
+  const env = { PATH: join(dir, "bin"), HOME: dir, XDG_STATE_HOME: dir, PI_CODING_AGENT_DIR: join(dir, "agent") };
   const index = join(modules, "@earendil-works/pi-coding-agent/dist/index.js");
   execFileSync(process.execPath, [join(import.meta.dirname, "refresher.ts"), index], { env, timeout: 10_000 });
   assert.equal(existsSync(join(state, "refresher.pid")), false);
