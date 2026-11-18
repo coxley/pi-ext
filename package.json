@@ -1,0 +1,28 @@
+{
+  "name": "pi-ext",
+  "version": "0.1.0",
+  "description": "Pi prompt editor extensions: chips, annotations, markdown styling, paste and list handling, editor copy",
+  "private": true,
+  "type": "module",
+  "keywords": ["pi-package"],
+  "repository": "github:coxley/pi-ext",
+  "scripts": {
+    "test": "node --test *.test.ts */*.test.ts"
+  },
+  "engines": {
+    "node": ">=22.18"
+  },
+  "pi": {
+    "extensions": [
+      "./editor-copy/index.ts",
+      "./md-prompt/index.ts",
+      "./expand-paste/index.ts",
+      "./chips/index.ts",
+      "./annotate/index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  }
+}

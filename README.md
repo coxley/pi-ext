@@ -1,0 +1,50 @@
+# pi-ext
+
+Prompt editor extensions for [Pi](https://pi.dev): one package, five extensions.
+
+| Extension | What it does |
+|---|---|
+| [`chips`](chips/README.md) | Draws every paste marker as a labeled chip: URL, file, image, text, annotation. A pasted URL or file path, and a Ctrl+V image, become chips. Right-click a chip to expand it. Typed `@path`s that name a file are underlined. |
+| `annotate` | Select transcript text with the mouse to add a comment. The quote and comment go in the prompt as an `annotation N` chip; click the chip to edit it. |
+| [`expand-paste`](expand-paste/README.md) | The same paste twice in a row expands to editable text. Pastes lose shared indentation. `> ` quotes and list items (`- `, `1. `, `- [ ] `) continue on a new line; tab and shift+tab nest list items. |
+| `md-prompt` | Styles markdown in the prompt as you type: headings, quotes, lists, code, bold, italic, links. |
+| `editor-copy` | A mouse selection inside the prompt copies the prompt text: no frame characters, no wrap newlines, pastes as their content. |
+
+`annotate` uses `chips` and `editor-copy`, and `chips` uses `editor-copy` and `md-prompt`, so the package loads all five.
+
+## Install
+
+```sh
+pi install git:github.com/coxley/pi-ext
+```
+
+Then `/reload`, or start Pi again. `pi update --extensions` pulls new commits. To try it for one session only: `pi -e git:github.com/coxley/pi-ext`.
+
+## Requirements
+
+- Pi in fullscreen mode (`"tuiMode": "fullscreen"`, Pi's default) for the mouse features: annotations, chip right-click, and prompt copy. The rest work in both modes.
+- A [Nerd Font](https://www.nerdfonts.com) in the terminal for the chip icons.
+- Tested with Pi 1.5.2. The extensions patch pi-tui editor internals. At startup, each one checks that the pi-tui methods it uses still exist. If a Pi update removed one, that extension stays off and shows a warning; the editor keeps working.
+
+## Other extensions
+
+- Works alone. With `@xynogen/pix-pretty` (pix-display) installed, chips also labels its prompt and skill chips, and pix-pretty's own expansion sends text pastes as `<paste>…</paste>`.
+- Works with `pi-open-tui`'s editor frame.
+
+What the model receives on submit:
+
+| Chip | Without pix-pretty | With pix-pretty |
+|---|---|---|
+| URL | the URL | the URL |
+| file | `<path>/abs/file</path>` | `<path>/abs/file</path>` |
+| image | `/abs/image.png` | `<paste>/abs/image.png</paste>` |
+| text | the text | `<paste>text</paste>` |
+| annotation | the quote as `> ` lines, then the comment | the same, in `<paste>` |
+
+## Tests
+
+```sh
+npm test
+```
+
+The tests import Pi's own modules from the local Pi installation (`test-host.ts`): `$PI_TEST_MODULES`, then Pi's managed install (`$PI_CODING_AGENT_DIR`, default `~/.pi/agent`), then the global npm root. Set `PI_TEST_MODULES` to the `node_modules` directory that holds `@earendil-works/pi-coding-agent` to test another installation. The `@path` completion test needs `fd` (`$FD`, Pi's copy, or `fd`/`fdfind` on `PATH`). The pix-pretty test runs only when pix-display is installed.
