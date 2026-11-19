@@ -24,7 +24,8 @@
       "./rtk/index.ts",
       "./nudge/index.ts",
       "./clock/index.ts",
-      "./todo/index.ts"
+      "./todo/index.ts",
+      "./render/index.ts"
     ]
   },
   "peerDependencies": {
