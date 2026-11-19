@@ -32,15 +32,7 @@
       "./expand-paste/index.ts",
       "./chips/index.ts",
       "./annotate/index.ts",
-      "./sidebar/index.ts",
-      "./user-shell/index.ts",
-      "./rtk/index.ts",
-      "./nudge/index.ts",
-      "./clock/index.ts",
-      "./todo/index.ts",
-      "./render/index.ts",
-      "./btw/index.ts",
-      "./better-render/src/index.ts"
+      "./sidebar/index.ts"
     ]
   }
 }

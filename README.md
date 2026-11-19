@@ -1,6 +1,6 @@
 # pi-ext
 
-Prompt editor extensions for [Pi](https://pi.dev), and a session sidebar for Pi in Rex.
+Prompt editor extensions for [Pi](https://pi.dev), a session sidebar for Pi in Rex, and opt-in extras.
 
 | Extension | What it does |
 |---|---|
@@ -10,16 +10,30 @@ Prompt editor extensions for [Pi](https://pi.dev), and a session sidebar for Pi 
 | `md-prompt` | Styles markdown in the prompt as you type: headings, quotes, lists, code, bold, italic, links. |
 | `editor-copy` | A mouse selection inside the prompt copies the prompt text: no frame characters, no wrap newlines, pastes as their content. A transcript selection (copy or annotate quote) joins soft-wrapped rows but keeps each list item, quote row, and code line on its own line. |
 | [`sidebar`](sidebar/README.md) | A session tree left of the transcript (`ctrl+/`). It switches between Pis by swapping Rex blocks, shows their status, and starts Pis for cold sessions. Quitting a Pi leaves a shell in its pane. Needs Rex; without it, the tree shows but cannot switch. |
-| `user-shell` | `!` commands run in `$SHELL` instead of bash. zsh sources `~/.zshrc` first, so aliases and functions work. The Shadowfax sandbox denies shell startup files: there, the command runs without them. |
-| `rtk` | Prefixes known commands in the agent's bash calls with [`rtk`](https://github.com/rtk-ai/rtk), which compresses their output: `git add . && git push` runs as `rtk git add . && rtk git push`. A segment piped into another command, and any line with `<` or `>`, run unchanged. When `rtk` is not on `PATH` or in `~/.pi/agent/bin`, the first session downloads the latest release there and checks its SHA-256; `PI_OFFLINE` skips that. |
-| `nudge` | Appends a `[nudge]` line to a tool result the model reads; the call still runs. A bash command that stands in for `read`, `ls`, `grep`, `find` or `edit` (`cat f`, `sed -n '1,9p' f`, `sed -i`), or a heredoc that writes a real file, names the tool to use, once per kind per session. Pipelines, redirects, and scratch files (`/tmp`, `$TMPDIR`, a `mktemp` variable) stay quiet. The same call, or the same cycle of up to 5 calls, with the same result 3 times in a row gets a loop warning. |
-| `clock` | Each transcript block (prompt, reply, tool row, `!` command) shows its time, dim, at the right edge of its first line, as `14:32:05` in `America/New_York`, or `2026-11-01 14:32:05` from an earlier day; `/tz <zone>` changes the zone and keeps it in `~/.local/state/pi-clock/state.json`. A line with no room keeps its text and shows no time. While the agent works, the status reads `Working (1m 5s)`. |
-| `todo` | A `todo` tool: the agent's checklist for a multi-step task, saved in the session so it survives compaction and restarts. On an ordered list, opening an item marks earlier ones done, and closing one warns about earlier open items. During a long agent run, every 25th tool result names the next open item; nothing joins your prompts or starts a turn. Reads lists saved by `@xynogen/pix-todo`. |
-| `render` | Changes the expanded (ctrl+o) view of finished `bash` and `ls` results. `bash` output sits between two rules, green for exit 0 and red otherwise; `ls` lists entries as a tree with Nerd Font folder and file icons, followed by Pi's limit notices. Collapsed rows, such as `pi-minimum-sufficient-output`'s one line per tool, and running commands stay as they are. |
-| `btw` | `/btw [--no-ctx] <question>` asks a side question while the agent keeps working. One model call, with the main session's model and thinking level and no tools, sees the last 10 user and assistant messages (`--no-ctx`: none). A line above the editor shows each running question; the answer lands as a card in the transcript that never enters the agent's context. |
-| `better-render` | A fork of [pi-better-render](https://github.com/JeffeyChou/pi-better-render) 0.4.0 (MIT, see `better-render/LICENSE`; MathJax in `vendor/` is Apache-2.0). Draws assistant messages as rich Markdown while they stream: headings, callouts, lists, tables, code blocks with highlighting and a clickable `[Copy]` (fullscreen mode), Mermaid diagrams, and LaTeX formulas as Kitty images. Display only: the session and the model keep the original text. `/better-render` shows status and toggles modes. Needs `npm install` in this repo for `@resvg/resvg-js`. |
 
 `annotate` uses `chips` and `editor-copy`, and `chips` uses `editor-copy` and `md-prompt`, so the package loads all of them.
+
+## Opt-in extras
+
+The package does not load these. To turn one on, add its file to `extensions` in `~/.pi/agent/settings.json`; after `pi install git:github.com/coxley/pi-ext`, the clone is in `~/.pi/agent/git/github.com/coxley/pi-ext`:
+
+```json
+"extensions": [
+  "./git/github.com/coxley/pi-ext/clock/index.ts",
+  "./git/github.com/coxley/pi-ext/better-render/src/index.ts"
+]
+```
+
+| Extension | File | What it does |
+|---|---|---|
+| `user-shell` | `user-shell/index.ts` | `!` commands run in `$SHELL` instead of bash. zsh sources `~/.zshrc` first, so aliases and functions work. The Shadowfax sandbox denies shell startup files: there, the command runs without them. |
+| `rtk` | `rtk/index.ts` | Prefixes known commands in the agent's bash calls with [`rtk`](https://github.com/rtk-ai/rtk), which compresses their output: `git add . && git push` runs as `rtk git add . && rtk git push`. A segment piped into another command, and any line with `<` or `>`, run unchanged. When `rtk` is not on `PATH` or in `~/.pi/agent/bin`, the first session downloads the latest release there and checks its SHA-256; `PI_OFFLINE` skips that. |
+| `nudge` | `nudge/index.ts` | Appends a `[nudge]` line to a tool result the model reads; the call still runs. A bash command that stands in for `read`, `ls`, `grep`, `find` or `edit` (`cat f`, `sed -n '1,9p' f`, `sed -i`), or a heredoc that writes a real file, names the tool to use, once per kind per session. Pipelines, redirects, and scratch files (`/tmp`, `$TMPDIR`, a `mktemp` variable) stay quiet. The same call, or the same cycle of up to 5 calls, with the same result 3 times in a row gets a loop warning. |
+| `clock` | `clock/index.ts` | Each transcript block (prompt, reply, tool row, `!` command) shows its time, dim, at the right edge of its first line, as `14:32:05` in `America/New_York`, or `2026-11-01 14:32:05` from an earlier day; `/tz <zone>` changes the zone and keeps it in `~/.local/state/pi-clock/state.json`. A line with no room keeps its text and shows no time. While the agent works, the status reads `Working (1m 5s)`. |
+| `todo` | `todo/index.ts` | A `todo` tool: the agent's checklist for a multi-step task, saved in the session so it survives compaction and restarts. On an ordered list, opening an item marks earlier ones done, and closing one warns about earlier open items. During a long agent run, every 25th tool result names the next open item; nothing joins your prompts or starts a turn. Reads lists saved by `@xynogen/pix-todo`. |
+| `render` | `render/index.ts` | Changes the expanded (ctrl+o) view of finished `bash` and `ls` results. `bash` output sits between two rules, green for exit 0 and red otherwise; `ls` lists entries as a tree with Nerd Font folder and file icons, followed by Pi's limit notices. Collapsed rows, such as `pi-minimum-sufficient-output`'s one line per tool, and running commands stay as they are. |
+| `btw` | `btw/index.ts` | `/btw [--no-ctx] <question>` asks a side question while the agent keeps working. One model call, with the main session's model and thinking level and no tools, sees the last 10 user and assistant messages (`--no-ctx`: none). A line above the editor shows each running question; the answer lands as a card in the transcript that never enters the agent's context. |
+| `better-render` | `better-render/src/index.ts` | A fork of [pi-better-render](https://github.com/JeffeyChou/pi-better-render) 0.4.0 (MIT, see `better-render/LICENSE`; MathJax in `vendor/` is Apache-2.0). Draws assistant messages as rich Markdown while they stream: headings, callouts, lists, tables, code blocks with highlighting and a clickable `[Copy]` (fullscreen mode), Mermaid diagrams, and LaTeX formulas as Kitty images. Display only: the session and the model keep the original text. `/better-render` shows status and toggles modes. Do not also install `pi-better-render`. |
 
 ## Install
 
@@ -28,6 +42,8 @@ pi install git:github.com/coxley/pi-ext
 ```
 
 Then `/reload`, or start Pi again. `pi update --extensions` pulls new commits. To try it for one session only: `pi -e git:github.com/coxley/pi-ext`.
+
+From a local clone, run `npm install` once: `better-render` needs `@resvg/resvg-js`, and Pi installs dependencies only for npm and git sources.
 
 ## Requirements
 
