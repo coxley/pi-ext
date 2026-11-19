@@ -23,7 +23,8 @@
       "./user-shell/index.ts",
       "./rtk/index.ts",
       "./nudge/index.ts",
-      "./clock/index.ts"
+      "./clock/index.ts",
+      "./todo/index.ts"
     ]
   },
   "peerDependencies": {
