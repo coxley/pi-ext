@@ -30,8 +30,11 @@ test("stamp keeps the line's background in the columns around the time", () => {
 });
 
 test("clockTime, elapsed and isZone", () => {
-  assert.equal(clockTime(Date.UTC(2026, 0, 1, 19, 32, 5), "America/New_York"), "14:32:05");
-  assert.equal(clockTime(Date.UTC(2026, 6, 1, 4, 5, 6), "America/New_York"), "00:05:06", "summer time, 24-hour");
+  const at = Date.UTC(2026, 0, 1, 19, 32, 5);
+  assert.equal(clockTime(at, "America/New_York", at + 3_600_000), "14:32:05", "today: time only");
+  assert.equal(clockTime(Date.UTC(2026, 6, 1, 4, 5, 6), "America/New_York", Date.UTC(2026, 6, 1, 12)), "00:05:06", "summer time, 24-hour");
+  assert.equal(clockTime(at, "America/New_York", Date.UTC(2026, 0, 2, 5, 0, 0)), "2026-01-01 14:32:05", "an earlier day: just after midnight in that zone");
+  assert.equal(clockTime(at, "Asia/Tokyo", at), "04:32:05", "the zone decides the day");
   assert.deepEqual([0, 12_400, 185_000, 3_725_000].map(elapsed), ["0s", "12s", "3m 5s", "1h 2m"]);
   assert.equal(isZone("Europe/Berlin"), true);
   assert.equal(isZone("Mars/Olympus"), false);
@@ -66,7 +69,7 @@ test("the extension stamps blocks with their session time, and restores render o
   assert.equal(Object.hasOwn(proto, "render"), false, "inherits render from Container");
   await emit("session_start", ctx);
   const block = (command: string) => Object.assign(Object.create(proto), { command, children: [{ render: () => ["", "$ ls"] }] });
-  assert.deepEqual(proto.render.call(block("ls"), 20), ["", "$ ls       14:32:05 "]);
+  assert.deepEqual(proto.render.call(block("ls"), 30), ["", `$ ls${" ".repeat(6)}2026-01-01 14:32:05 `], "an earlier day shows its date");
   const live = proto.render.call(block("pwd"), 20)[1];
   assert.match(live, /^\$ ls {7}\d\d:\d\d:\d\d $/, "a block not in the session gets its first-render time");
   await emit("session_shutdown", ctx);

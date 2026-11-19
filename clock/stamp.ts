@@ -21,12 +21,20 @@ export function stamp(lines: string[], width: number, label: string, style: (tex
 }
 
 const formats = new Map<string, Intl.DateTimeFormat>();
+const format = (locale: string, timeZone: string, options: Intl.DateTimeFormatOptions) => {
+  const key = `${locale} ${timeZone}`;
+  let f = formats.get(key);
+  if (!f) formats.set(key, (f = new Intl.DateTimeFormat(locale, { timeZone, ...options })));
+  return f;
+};
 
-// clockTime formats ms since the epoch as 24-hour hh:mm:ss in timeZone.
-export function clockTime(ms: number, timeZone: string): string {
-  let format = formats.get(timeZone);
-  if (!format) formats.set(timeZone, (format = new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" })));
-  return format.format(ms);
+// clockTime formats ms since the epoch as 24-hour hh:mm:ss in timeZone, after a yyyy-mm-dd date
+// when ms falls on an earlier day than now there.
+export function clockTime(ms: number, timeZone: string, now = Date.now()): string {
+  const time = format("en-GB", timeZone, { hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(ms);
+  const day = format("en-CA", timeZone, { year: "numeric", month: "2-digit", day: "2-digit" });
+  const date = day.format(ms);
+  return date === day.format(now) ? time : `${date} ${time}`;
 }
 
 export function isZone(timeZone: string): boolean {
