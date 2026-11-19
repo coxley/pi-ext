@@ -4,13 +4,26 @@
   "description": "Pi prompt editor extensions: chips, annotations, markdown styling, paste and list handling, editor copy; and a Rex session sidebar",
   "private": true,
   "type": "module",
-  "keywords": ["pi-package"],
+  "keywords": [
+    "pi-package"
+  ],
   "repository": "github:coxley/pi-ext",
   "scripts": {
     "test": "node --test *.test.ts */*.test.ts"
   },
   "engines": {
     "node": ">=22.18"
+  },
+  "dependencies": {
+    "@resvg/resvg-js": "^2.6.2"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": { "optional": true },
+    "@earendil-works/pi-tui": { "optional": true }
   },
   "pi": {
     "extensions": [
@@ -26,11 +39,8 @@
       "./clock/index.ts",
       "./todo/index.ts",
       "./render/index.ts",
-      "./btw/index.ts"
+      "./btw/index.ts",
+      "./better-render/src/index.ts"
     ]
-  },
-  "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*",
-    "@earendil-works/pi-tui": "*"
   }
 }
