@@ -20,7 +20,8 @@
       "./chips/index.ts",
       "./annotate/index.ts",
       "./sidebar/index.ts",
-      "./user-shell/index.ts"
+      "./user-shell/index.ts",
+      "./rtk/index.ts"
     ]
   },
   "peerDependencies": {

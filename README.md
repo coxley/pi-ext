@@ -11,6 +11,7 @@ Prompt editor extensions for [Pi](https://pi.dev), and a session sidebar for Pi 
 | `editor-copy` | A mouse selection inside the prompt copies the prompt text: no frame characters, no wrap newlines, pastes as their content. A transcript selection (copy or annotate quote) joins soft-wrapped rows but keeps each list item, quote row, and code line on its own line. |
 | [`sidebar`](sidebar/README.md) | A session tree left of the transcript (`ctrl+/`). It switches between Pis by swapping Rex blocks, shows their status, and starts Pis for cold sessions. Quitting a Pi leaves a shell in its pane. Needs Rex; without it, the tree shows but cannot switch. |
 | `user-shell` | `!` commands run in `$SHELL` instead of bash. zsh sources `~/.zshrc` first, so aliases and functions work. The Shadowfax sandbox denies shell startup files: there, the command runs without them. |
+| `rtk` | Prefixes known commands in the agent's bash calls with [`rtk`](https://github.com/rtk-ai/rtk), which compresses their output: `git add . && git push` runs as `rtk git add . && rtk git push`. A segment piped into another command, and any line with `<` or `>`, run unchanged. When `rtk` is not on `PATH` or in `~/.pi/agent/bin`, the first session downloads the latest release there and checks its SHA-256; `PI_OFFLINE` skips that. |
 
 `annotate` uses `chips` and `editor-copy`, and `chips` uses `editor-copy` and `md-prompt`, so the package loads all of them.
 
