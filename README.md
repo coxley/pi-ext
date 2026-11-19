@@ -10,6 +10,7 @@ Prompt editor extensions for [Pi](https://pi.dev), and a session sidebar for Pi 
 | `md-prompt` | Styles markdown in the prompt as you type: headings, quotes, lists, code, bold, italic, links. |
 | `editor-copy` | A mouse selection inside the prompt copies the prompt text: no frame characters, no wrap newlines, pastes as their content. A transcript selection (copy or annotate quote) joins soft-wrapped rows but keeps each list item, quote row, and code line on its own line. |
 | [`sidebar`](sidebar/README.md) | A session tree left of the transcript (`ctrl+/`). It switches between Pis by swapping Rex blocks, shows their status, and starts Pis for cold sessions. Quitting a Pi leaves a shell in its pane. Needs Rex; without it, the tree shows but cannot switch. |
+| `user-shell` | `!` commands run in `$SHELL` instead of bash. zsh sources `~/.zshrc` first, so aliases and functions work. The Shadowfax sandbox denies shell startup files: there, the command runs without them. |
 
 `annotate` uses `chips` and `editor-copy`, and `chips` uses `editor-copy` and `md-prompt`, so the package loads all of them.
 

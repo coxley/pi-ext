@@ -19,7 +19,8 @@
       "./expand-paste/index.ts",
       "./chips/index.ts",
       "./annotate/index.ts",
-      "./sidebar/index.ts"
+      "./sidebar/index.ts",
+      "./user-shell/index.ts"
     ]
   },
   "peerDependencies": {
