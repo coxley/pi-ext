@@ -4,11 +4,12 @@ export type Layout = {
   stripTerminalSequences(text: string): string;
 };
 
-// stamp puts label at the right edge of the first non-blank line, margin columns from the end. It
-// replaces only blank columns, so the line keeps its background; a line without a blank column
-// between its text and label stays as it is. style must keep label's width: it only colors it.
+// stamp puts label at the right edge of the first line with text, margin columns from the end; a
+// border rule (a `!` block's top line) does not count as text. It replaces only blank columns, so
+// the line keeps its background; a line without a blank column between its text and label stays as
+// it is. style must keep label's width: it only colors it.
 export function stamp(lines: string[], width: number, label: string, style: (text: string) => string, ui: Layout, margin = 1): string[] {
-  const i = lines.findIndex((line) => ui.stripTerminalSequences(line).trim() !== "");
+  const i = lines.findIndex((line) => !/^[\s─━═]*$/.test(ui.stripTerminalSequences(line)));
   if (i < 0) return lines;
   const line = lines[i];
   const cut = width - margin - label.length;

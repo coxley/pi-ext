@@ -15,6 +15,8 @@ const dim = (s: string) => `\x1b[2m${s}\x1b[22m`;
 test("stamp puts the time at the right edge of the first non-blank line", () => {
   assert.deepEqual(stamp(["", "▾ Thinking", "body"], 24, "14:32:05", dim, layout).map(plain), ["", "▾ Thinking     14:32:05 ", "body"]);
   assert.deepEqual(stamp(["  edit +2 -2   ✓        "], 30, "14:32:05", dim, layout).map(plain), ["  edit +2 -2   ✓     14:32:05 "]);
+  const rule = "─".repeat(24);
+  assert.deepEqual(stamp([rule, "$ date", rule], 24, "14:32:05", dim, layout).map(plain), [rule, "$ date         14:32:05 ", rule], "a ! block's top rule is skipped");
   const tight = ["a long line that fills it"];
   assert.equal(stamp(tight, 30, "14:32:05", dim, layout), tight, "no blank column left before the time");
   const blank = ["", "   "];
