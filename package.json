@@ -22,7 +22,8 @@
       "./sidebar/index.ts",
       "./user-shell/index.ts",
       "./rtk/index.ts",
-      "./nudge/index.ts"
+      "./nudge/index.ts",
+      "./clock/index.ts"
     ]
   },
   "peerDependencies": {
