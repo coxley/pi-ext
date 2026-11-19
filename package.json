@@ -25,7 +25,8 @@
       "./nudge/index.ts",
       "./clock/index.ts",
       "./todo/index.ts",
-      "./render/index.ts"
+      "./render/index.ts",
+      "./btw/index.ts"
     ]
   },
   "peerDependencies": {
